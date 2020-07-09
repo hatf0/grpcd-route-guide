@@ -5,6 +5,7 @@ import routeguide.route_guide;
 import google.rpc.status;
 import grpc.stream.server.reader;
 import grpc.stream.server.writer;
+import grpc.logger;
 
 float ConvertToRadians(float num) {
     return num * 3.1415926 /180;
@@ -34,9 +35,6 @@ class RouteGuideServer : RouteGuide {
     Status GetFeature(Point p, ref Feature f) {
         Status t;
 
-        f.location.latitude = -1;
-        f.location.longitude = 0;
-
         foreach(place; _places) {
             if(p.longitude == place.location.longitude && p.latitude == place.location.latitude) {
                 f.name = place.name;
@@ -60,6 +58,8 @@ class RouteGuideServer : RouteGuide {
         long top = max(lo.latitude, hi.latitude);
         long bottom = min(lo.latitude, hi.latitude);
 
+        writeln("ListFeatures");
+
         foreach(place; _places) {
             if(place.location.longitude >= left &&
                place.location.longitude <= right &&
@@ -70,6 +70,7 @@ class RouteGuideServer : RouteGuide {
                 f.location.longitude = cast(int)place.location.longitude;
                 f.location.latitude = cast(int)place.location.latitude;
                 f.name = place.name;
+
                 out_.write(f);
             }
         }
@@ -80,16 +81,18 @@ class RouteGuideServer : RouteGuide {
     Status RecordRoute(ServerReader!(Point) p, ref RouteSummary route) {
         Status t;
 
-        Point point;
         int point_count = 0;
         int feature_count = 0;
         float distance = 0.0;
         Point previous;
-        import std.datetime.stopwatch;
+        import std.datetime;
 
-        auto sw = StopWatch(AutoStart.yes);
+        writeln("RecordRoute");
+        auto before = Clock.currTime();
 
-        foreach(point; p.read()) {
+        Point point = p.readOne();
+
+        while (point !is Point.init) {
             point_count++;
             if (GetFeatureName(point, _places) != "") {
                 feature_count++;
@@ -99,32 +102,40 @@ class RouteGuideServer : RouteGuide {
             }
 
             previous = point;
+            point = p.readOne();
         }
 
-        sw.stop();
+        auto timeElapsed = Clock.currTime() - before;
 
         route.pointCount = point_count;
         route.featureCount = feature_count;
         route.distance = cast(int)distance;
-        route.elapsedTime = cast(int)sw.peek.total!"seconds"();
+        timeElapsed.split!"seconds"(route.elapsedTime);
 
         return t;
     }
 
-    Status RouteChat(ref ServerReader!(RouteNote) rn, ServerWriter!(RouteNote) _rn) {
+    Status RouteChat(ServerReader!(RouteNote) rn, ServerWriter!(RouteNote) _rn) {
         Status t;
 
+        writeln("RouteChat");
         _rn.start();
 
-        foreach(msg; rn.read()) {
+        RouteNote[] receivedNotes; 
+        import core.time;
+        RouteNote msg = rn.readOne();
+        while(msg !is RouteNote.init) {
+            writeln("received note: ", msg);
             foreach(n; receivedNotes) {
                 if(n.location.latitude == msg.location.latitude &&
                         n.location.longitude == msg.location.longitude) {
+                    writeln("found matching note: ", n);
                     _rn.write(n);
                 }
             }
 
             receivedNotes ~= msg;
+            msg = rn.readOne();
         }
 
         return t;
@@ -136,7 +147,6 @@ class RouteGuideServer : RouteGuide {
 
     private {
 
-        RouteNote[] receivedNotes; 
         string GetFeatureName(Point point, Feature[] list) {
             foreach(feature; list) {
                 if(feature.location.latitude == point.latitude && feature.location.longitude == point.longitude) {
@@ -165,14 +175,15 @@ class RouteGuideServer : RouteGuide {
 import std.stdio;
 void main() {
 
+    import grpc.logger;
+    debug gLogger.minVerbosity = Verbosity.Debug; 
+
     ServerBuilder builder = new ServerBuilder();
 
     builder.port = 50051;
 
     auto server = builder.build();
     builder.register!(RouteGuideServer)();
-
-    server.finish();
 
     server.run();
     

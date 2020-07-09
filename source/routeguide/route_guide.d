@@ -59,6 +59,6 @@ interface RouteGuide
     @RPC("/routeguide.RouteGuide/RouteChat")
     @ClientStreaming
     @ServerStreaming
-    Status RouteChat(ref ServerReader!(RouteNote), ServerWriter!(RouteNote));
+    Status RouteChat(ServerReader!(RouteNote), ServerWriter!(RouteNote));
 
 }
