@@ -5,11 +5,9 @@ module routeguide.route_guide;
 
 import google.protobuf;
 import google.rpc.status;
-import grpc.stream.server.writer;
-import grpc.stream.server.reader;
+import grpc.stream;
 
-
-enum protocVersion = 3007000;
+enum protocVersion = 3021012;
 
 struct Point
 {
@@ -43,22 +41,22 @@ struct RouteSummary
     @Proto(4) int elapsedTime = protoDefaultValue!int;
 }
 
-interface RouteGuide
+interface RouteGuide(alias Reader, alias Writer)
 {
     @RPC("/routeguide.RouteGuide/GetFeature")
     Status GetFeature(Point, ref Feature);
 
     @RPC("/routeguide.RouteGuide/ListFeatures")
     @ServerStreaming
-    Status ListFeatures(Rectangle, ServerWriter!(Feature));
+    Status ListFeatures(Rectangle, ref Writer!(Feature));
 
     @RPC("/routeguide.RouteGuide/RecordRoute")
     @ClientStreaming
-    Status RecordRoute(ServerReader!(Point), ref RouteSummary);
+    Status RecordRoute(ref Reader!(Point), ref RouteSummary);
 
     @RPC("/routeguide.RouteGuide/RouteChat")
     @ClientStreaming
     @ServerStreaming
-    Status RouteChat(ServerReader!(RouteNote), ServerWriter!(RouteNote));
+    Status RouteChat(ref Reader!(RouteNote), ref Writer!(RouteNote));
 
 }

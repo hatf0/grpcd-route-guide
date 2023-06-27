@@ -31,10 +31,10 @@ float GetDistance(const Point start, const Point end) {
 }
 
 
-class RouteGuideServer : RouteGuide {
+class RouteGuideServer : RouteGuide!(ServerReader, ServerWriter) {
     Status GetFeature(Point p, ref Feature f) {
         Status t;
-
+        writeln("GetFeature");
         foreach(place; _places) {
             if(p.longitude == place.location.longitude && p.latitude == place.location.latitude) {
                 f.name = place.name;
@@ -47,7 +47,7 @@ class RouteGuideServer : RouteGuide {
         return t;
     }
 
-    Status ListFeatures(Rectangle r, ServerWriter!(Feature) out_) {
+    Status ListFeatures(Rectangle r, ref ServerWriter!(Feature) out_) {
         Status t;
 
         import std.algorithm.comparison;
@@ -78,7 +78,7 @@ class RouteGuideServer : RouteGuide {
         return t;
     }
 
-    Status RecordRoute(ServerReader!(Point) p, ref RouteSummary route) {
+    Status RecordRoute(ref ServerReader!(Point) p, ref RouteSummary route) {
         Status t;
 
         int point_count = 0;
@@ -115,7 +115,7 @@ class RouteGuideServer : RouteGuide {
         return t;
     }
 
-    Status RouteChat(ServerReader!(RouteNote) rn, ServerWriter!(RouteNote) _rn) {
+    Status RouteChat(ref ServerReader!(RouteNote) rn, ref ServerWriter!(RouteNote) _rn) {
         Status t;
 
         writeln("RouteChat");
@@ -183,7 +183,7 @@ void main() {
     builder.port = 50051;
 
     auto server = builder.build();
-    builder.register!(RouteGuideServer)();
+    server.registerService!(RouteGuideServer)();
 
     server.run();
     
